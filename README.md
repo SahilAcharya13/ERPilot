@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # AI-Powered ERP Database Chatbot
 
 An enterprise-ready, production-grade AI-powered ERP database chatbot system. This system allows authenticated users (with specific role permissions) to interact with an ERP database using natural language, translating user commands into safe, parameterized SQL queries while enforcing rigorous security controls.
@@ -109,3 +110,6 @@ The local SQLite db seeds the following test credentials:
 | **Sales** | `sales@erp.com` | `Sales123!` |
 | **Accounts** | `accounts@erp.com` | `Accounts123!` |
 | **Manager** | `manager@erp.com` | `Manager123!` |
+=======
+# ERPilot
+>>>>>>> 29518fcba49302ae2a8d97ff4092ea818bf1958f
