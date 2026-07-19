@@ -23,5 +23,10 @@ public class AiActionLog
     public int? ExecutionTimeMs { get; set; }
     public string? ErrorMessage { get; set; }
     
+    public bool ForcedToPendingBySafety { get; set; }
+    public int? PromptTokens { get; set; }
+    public int? CompletionTokens { get; set; }
+    public int? TotalTokens { get; set; }
+    
     public DateTime Timestamp { get; set; } = DateTime.UtcNow;
 }

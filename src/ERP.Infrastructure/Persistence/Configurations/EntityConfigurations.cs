@@ -151,6 +151,10 @@ public class AiActionLogConfiguration : IEntityTypeConfiguration<AiActionLog>
         builder.Property(l => l.ExtractedIntent).HasMaxLength(100);
         builder.Property(l => l.ApprovalStatus).HasConversion<string>().HasMaxLength(50).IsRequired();
         builder.Property(l => l.ExecutionStatus).HasConversion<string>().HasMaxLength(50).IsRequired();
+        builder.Property(l => l.ForcedToPendingBySafety).HasDefaultValue(false);
+        builder.Property(l => l.PromptTokens).IsRequired(false);
+        builder.Property(l => l.CompletionTokens).IsRequired(false);
+        builder.Property(l => l.TotalTokens).IsRequired(false);
         
         builder.HasOne(l => l.User)
             .WithMany()

@@ -12,6 +12,8 @@ using ERP.Domain.Entities;
 using ERP.Domain.Enums;
 using ERP.Domain.Interfaces;
 using ERP.Infrastructure.Services.SqlSafety;
+using ERP.Infrastructure.Persistence.Contexts;
+using Microsoft.Extensions.Configuration;
 
 namespace ERP.WebAPI.Controllers;
 
@@ -25,16 +27,20 @@ public class ChatController : ControllerBase
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMemoryCache _cache;
     private readonly SqlSafetyGuard _safetyGuard;
+    private readonly IConfiguration _configuration;
 
     public ChatController(
         INlpService nlpService,
         IUnitOfWork unitOfWork,
-        IMemoryCache cache)
+        IMemoryCache cache,
+        ApplicationDbContext dbContext,
+        IConfiguration configuration)
     {
         _nlpService = nlpService;
         _unitOfWork = unitOfWork;
         _cache = cache;
-        _safetyGuard = new SqlSafetyGuard();
+        _configuration = configuration;
+        _safetyGuard = new SqlSafetyGuard(dbContext);
     }
 
     public class ChatRequest
@@ -80,8 +86,49 @@ public class ChatController : ControllerBase
         // 1. Process NLP
         var nlpResult = await _nlpService.ProcessPromptAsync(request.Prompt, userId);
 
-        // 2. Security Guard check (AST validation)
-        var safetyCheck = _safetyGuard.VerifySql(nlpResult.GeneratedSql);
+        // 1.5 Handle Clarification Responses
+        if (nlpResult.IsClarification)
+        {
+            var clarificationLog = new AiActionLog
+            {
+                UserID = userId,
+                OriginalPrompt = request.Prompt,
+                ExtractedIntent = nlpResult.Intent,
+                Parameters = JsonSerializer.Serialize(nlpResult.Parameters),
+                GeneratedSQL = "",
+                ApprovalStatus = ApprovalStatus.SystemBypassed,
+                ExecutionStatus = ExecutionStatus.Success,
+                PromptTokens = nlpResult.PromptTokens,
+                CompletionTokens = nlpResult.CompletionTokens,
+                TotalTokens = nlpResult.TotalTokens,
+                Timestamp = DateTime.UtcNow
+            };
+            await _unitOfWork.AiActionLogs.AddAsync(clarificationLog);
+            await _unitOfWork.CompleteAsync();
+
+            return Ok(new
+            {
+                intent = nlpResult.Intent,
+                explanation = nlpResult.Explanation,
+                sql = "",
+                requiresApproval = false,
+                isClarification = true
+            });
+        }
+
+        // 2. Security Guard check (AST validation and row count verification)
+        var maxRowsThreshold = 5;
+        if (int.TryParse(_configuration["Safety:MaxRowsAffectedThreshold"], out var thresholdVal))
+        {
+            maxRowsThreshold = thresholdVal;
+        }
+
+        var safetyCheck = await _safetyGuard.VerifySqlAsync(
+            nlpResult.GeneratedSql,
+            nlpResult.ParameterValues,
+            _unitOfWork,
+            maxRowsThreshold);
+
         if (!safetyCheck.IsSuccess)
         {
             // Log security failure to AiActionLog
@@ -95,12 +142,21 @@ public class ChatController : ControllerBase
                 ApprovalStatus = ApprovalStatus.SystemBypassed,
                 ExecutionStatus = ExecutionStatus.Failed,
                 ErrorMessage = $"Security Guard Blocked: {safetyCheck.ErrorMessage}",
+                PromptTokens = nlpResult.PromptTokens,
+                CompletionTokens = nlpResult.CompletionTokens,
+                TotalTokens = nlpResult.TotalTokens,
                 Timestamp = DateTime.UtcNow
             };
             await _unitOfWork.AiActionLogs.AddAsync(failedLog);
             await _unitOfWork.CompleteAsync();
 
             return BadRequest(new { error = safetyCheck.ErrorMessage });
+        }
+
+        var forcedToPending = safetyCheck.ForcedToPending;
+        if (forcedToPending)
+        {
+            nlpResult.RequiresApproval = true;
         }
 
         // 3. Handle Flow based on DML vs Select
@@ -124,6 +180,9 @@ public class ChatController : ControllerBase
                     ApprovalStatus = ApprovalStatus.SystemBypassed,
                     ExecutionStatus = ExecutionStatus.Success,
                     ExecutionTimeMs = (int)stopwatch.ElapsedMilliseconds,
+                    PromptTokens = nlpResult.PromptTokens,
+                    CompletionTokens = nlpResult.CompletionTokens,
+                    TotalTokens = nlpResult.TotalTokens,
                     Timestamp = DateTime.UtcNow
                 };
                 await _unitOfWork.AiActionLogs.AddAsync(successLog);
@@ -153,6 +212,9 @@ public class ChatController : ControllerBase
                     ExecutionStatus = ExecutionStatus.Failed,
                     ExecutionTimeMs = (int)stopwatch.ElapsedMilliseconds,
                     ErrorMessage = ex.Message,
+                    PromptTokens = nlpResult.PromptTokens,
+                    CompletionTokens = nlpResult.CompletionTokens,
+                    TotalTokens = nlpResult.TotalTokens,
                     Timestamp = DateTime.UtcNow
                 };
                 await _unitOfWork.AiActionLogs.AddAsync(dbFailedLog);
@@ -174,6 +236,10 @@ public class ChatController : ControllerBase
                 GeneratedSQL = nlpResult.GeneratedSql,
                 ApprovalStatus = ApprovalStatus.Pending,
                 ExecutionStatus = ExecutionStatus.NotStarted,
+                ForcedToPendingBySafety = forcedToPending,
+                PromptTokens = nlpResult.PromptTokens,
+                CompletionTokens = nlpResult.CompletionTokens,
+                TotalTokens = nlpResult.TotalTokens,
                 Timestamp = DateTime.UtcNow
             };
             await _unitOfWork.AiActionLogs.AddAsync(pendingLog);

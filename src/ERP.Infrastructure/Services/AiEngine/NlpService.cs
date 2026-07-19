@@ -139,18 +139,14 @@ ORDER BY o.OrderDate ASC;";
             if (int.TryParse(orderIdentifier, out _))
             {
                 result.GeneratedSql = isSqlite
-                    ? @"UPDATE Orders SET IsDeleted = 1, DeletedAt = CURRENT_TIMESTAMP WHERE OrderID = CAST(@p0 AS INTEGER);
-UPDATE Payments SET OrderID = NULL WHERE OrderID = CAST(@p0 AS INTEGER);"
-                    : @"UPDATE dbo.Orders SET IsDeleted = 1, DeletedAt = SYSUTCDATETIME() WHERE OrderID = CAST(@p0 AS INT);
-UPDATE dbo.Payments SET OrderID = NULL WHERE OrderID = CAST(@p0 AS INT);";
+                    ? @"UPDATE Orders SET IsDeleted = 1, DeletedAt = CURRENT_TIMESTAMP WHERE OrderID = CAST(@p0 AS INTEGER)"
+                    : @"UPDATE dbo.Orders SET IsDeleted = 1, DeletedAt = SYSUTCDATETIME() WHERE OrderID = CAST(@p0 AS INT)";
             }
             else
             {
                 result.GeneratedSql = isSqlite
-                    ? @"UPDATE Orders SET IsDeleted = 1, DeletedAt = CURRENT_TIMESTAMP WHERE OrderNumber = @p0;
-UPDATE Payments SET OrderID = NULL WHERE OrderID = (SELECT OrderID FROM Orders WHERE OrderNumber = @p0);"
-                    : @"UPDATE dbo.Orders SET IsDeleted = 1, DeletedAt = SYSUTCDATETIME() WHERE OrderNumber = @p0;
-UPDATE dbo.Payments SET OrderID = NULL WHERE OrderID = (SELECT OrderID FROM dbo.Orders WHERE OrderNumber = @p0);";
+                    ? @"UPDATE Orders SET IsDeleted = 1, DeletedAt = CURRENT_TIMESTAMP WHERE OrderNumber = @p0"
+                    : @"UPDATE dbo.Orders SET IsDeleted = 1, DeletedAt = SYSUTCDATETIME() WHERE OrderNumber = @p0";
             }
         }
         // 5. Intent: CreateOrder
@@ -187,18 +183,10 @@ UPDATE dbo.Payments SET OrderID = NULL WHERE OrderID = (SELECT OrderID FROM dbo.
             result.GeneratedSql = isSqlite
                 ? $@"INSERT INTO Orders (OrderNumber, CustomerID, OrderDate, OrderStatus, TotalAmount, PaidAmount, Remarks, IsDeleted)
 SELECT @p4, CustomerID, CURRENT_TIMESTAMP, 'Pending', (@p2 * @p3), 0.0, 'Created via AI Assistant', 0
-FROM Customers WHERE CompanyName = @p0 AND IsDeleted = 0;
-
-INSERT INTO OrderItems (OrderID, ProductID, Description, Quantity, Unit, Rate)
-SELECT last_insert_rowid(), ProductID, ProductName, @p2, Unit, @p3
-FROM Products WHERE ProductName = @p1 AND IsDeleted = 0;"
+FROM Customers WHERE CompanyName = @p0 AND IsDeleted = 0"
                 : $@"INSERT INTO dbo.Orders (OrderNumber, CustomerID, OrderDate, OrderStatus, TotalAmount, PaidAmount, Remarks, IsDeleted)
 SELECT @p4, CustomerID, SYSUTCDATETIME(), 'Pending', (@p2 * @p3), 0.0, 'Created via AI Assistant', 0
-FROM dbo.Customers WHERE CompanyName = @p0 AND IsDeleted = 0;
-
-INSERT INTO dbo.OrderItems (OrderID, ProductID, Description, Quantity, Unit, Rate)
-SELECT SCOPE_IDENTITY(), ProductID, ProductName, @p2, Unit, @p3
-FROM dbo.Products WHERE ProductName = @p1 AND IsDeleted = 0;";
+FROM dbo.Customers WHERE CompanyName = @p0 AND IsDeleted = 0";
         }
         // 6. Intent: RecordPayment
         // "Record payment of 50000 received today from XYZ Traders"

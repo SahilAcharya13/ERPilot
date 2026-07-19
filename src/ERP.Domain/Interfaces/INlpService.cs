@@ -12,6 +12,11 @@ public class NlpResult
     public bool RequiresApproval { get; set; }
     public Dictionary<string, string> Parameters { get; set; } = new();
     public List<object> ParameterValues { get; set; } = new();
+    
+    public int? PromptTokens { get; set; }
+    public int? CompletionTokens { get; set; }
+    public int? TotalTokens { get; set; }
+    public bool IsClarification { get; set; }
 }
 
 public interface INlpService

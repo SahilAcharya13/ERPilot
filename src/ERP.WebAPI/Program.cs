@@ -13,6 +13,7 @@ using ERP.Infrastructure.Persistence.Contexts;
 using ERP.Infrastructure.Persistence.Repositories;
 using ERP.Infrastructure.Services.AiEngine;
 using ERP.Infrastructure.Services.Security;
+using ERP.WebAPI.Controllers;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -36,8 +37,25 @@ else
 
 // 3. Add Dependency Injection (Repositories, Unit of Work, NLP service, Token service)
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
-builder.Services.AddScoped<INlpService, NlpService>();
+
+builder.Services.AddHttpClient<ILlmClient, OpenAiLlmClient>();
+builder.Services.AddHttpClient<ITranscriptionService, OpenAiWhisperService>();
+
+builder.Services.AddScoped<LlmNlpService>();
+builder.Services.AddScoped<NlpService>();
+builder.Services.AddScoped<INlpService>(sp =>
+{
+    var config = sp.GetRequiredService<IConfiguration>();
+    var provider = config["Nlp:Provider"] ?? "RuleBased";
+    if (provider.Equals("Llm", StringComparison.OrdinalIgnoreCase))
+    {
+        return sp.GetRequiredService<LlmNlpService>();
+    }
+    return sp.GetRequiredService<NlpService>();
+});
+
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
+builder.Services.AddScoped<ChatController>();
 
 // 4. Add JWT Authentication Services
 var secretKey = builder.Configuration["JwtSettings:SecretKey"] ?? "ThisIsAVerySecretKeyForERPDatabaseSystem2026!";
