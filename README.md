@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # AI-Powered ERP Database Chatbot
 
 An enterprise-ready, production-grade AI-powered ERP database chatbot system. This system allows authenticated users (with specific role permissions) to interact with an ERP database using natural language, translating user commands into safe, parameterized SQL queries while enforcing rigorous security controls.
